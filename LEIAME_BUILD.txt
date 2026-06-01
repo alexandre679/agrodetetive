@@ -1,0 +1,34 @@
+AGRO DETETIVE v1.0 - Como Gerar o Executavel
+=====================================================
+
+PASSOS:
+
+1. INSTALAR DEPENDENCIAS (so na primeira vez)
+   De dois cliques em: instalar.bat
+
+2. INSTALAR NSIS (gerador de instalador)
+   Baixe: https://nsis.sourceforge.io/Download
+   Instale normalmente.
+
+3. GERAR O EXECUTAVEL
+   Abra o terminal na pasta produtor_app:
+   
+       python build.py
+   
+   Aguarde 3-5 minutos. Sera gerado:
+   
+       AgroDetetive_Setup_v1.0.exe
+
+4. DISTRIBUIR AO PRODUTOR
+   - Envie: AgroDetetive_Setup_v1.0.exe
+   - Produtor baixa e da dois cliques
+   - Instala como qualquer programa Windows
+   - Atalho criado na Area de Trabalho automaticamente
+
+ATUALIZAR VERSAO:
+   - build.py: mude VERSAO = "1.0" para "1.1"  
+   - licenca_client.py: mude VERSAO_EXE = "1.0" para "1.1"
+   - Execute python build.py novamente
+   - Ative no admin para notificar os produtores
+
+Desenvolvido por Alexandre Dallazem
