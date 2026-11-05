@@ -9,7 +9,7 @@ const pedAberto = p => !['Entregue', 'Cancelado'].includes(p.status);
 const orcAberto = o => ['Pendente', 'Enviado'].includes(o.status);
 
 const CFG_PADRAO = {
-  empresa: 'Minha Empresa de Brindes',
+  empresa: 'Dallazem Artesanatos',
   cnpj: '', telefone: '', email: '', endereco: '', logo: '',
   diasAlerta: 90,
   validadeDias: 15,

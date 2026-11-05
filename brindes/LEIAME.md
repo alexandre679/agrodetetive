@@ -1,4 +1,4 @@
-# Sistema de Gestão de Brindes
+# Dallazem Artesanatos — Sistema de Gestão
 
 Controle de **clientes, produtos, orçamentos e pedidos**, com:
 
