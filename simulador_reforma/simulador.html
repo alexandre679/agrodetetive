@@ -1,0 +1,794 @@
+<title>Simulador IBS/CBS do Produtor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: mesa de trabalho do contador — premissas no topo, lançamentos à esquerda, comparativo fixo à direita, memória de cálculo com base legal embaixo. */
+:root{
+  --bg:#F3F5F1; --surface:#FFFFFF; --surface-2:#EAEEE7; --line:#D3DACF; --ink:#18241D; --muted:#5A6A5F;
+  --accent:#1D6448; --accent-soft:#DCEBE2;
+  --contrib:#1D6448; --contrib-soft:#E0EEE6;
+  --nao:#9A6A12; --nao-soft:#F5EBD6;
+  --good:#1E7A47; --bad:#B3402F; --warn:#9A6A12; --warn-soft:#FBF1DC;
+  --font-display:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body:"Public Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111813; --surface:#18211B; --surface-2:#1F2A23; --line:#2E3B32; --ink:#E5ECE6; --muted:#9AAA9F;
+  --accent:#5DC392; --accent-soft:#1D3328;
+  --contrib:#5DC392; --contrib-soft:#1B3127;
+  --nao:#E2B254; --nao-soft:#3A2F17;
+  --good:#5DC392; --bad:#F08A78; --warn:#E2B254; --warn-soft:#352B15; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111813; --surface:#18211B; --surface-2:#1F2A23; --line:#2E3B32; --ink:#E5ECE6; --muted:#9AAA9F;
+  --accent:#5DC392; --accent-soft:#1D3328;
+  --contrib:#5DC392; --contrib-soft:#1B3127;
+  --nao:#E2B254; --nao-soft:#3A2F17;
+  --good:#5DC392; --bad:#F08A78; --warn:#E2B254; --warn-soft:#352B15; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(1.5rem,3vw,2.1rem);font-weight:800}
+h2{font-size:1.15rem;font-weight:700}
+h3{font-size:.95rem;font-weight:700}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono,.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 24px;border-bottom:2px solid var(--ink);padding-bottom:14px}
+header.top .lede{max-width:70ch;color:var(--muted);margin-top:6px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:8px 12px;font-weight:600;font-size:.88rem}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.btn.ghost{background:transparent}
+.btn.small{padding:5px 9px;font-size:.8rem}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line)}
+.panel-b{padding:14px 16px}
+
+/* premissas */
+.params{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 18px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:.78rem;font-weight:600;color:var(--muted)}
+.field .hint{font-size:.74rem;color:var(--muted)}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0;width:100%}
+input.num{text-align:right}
+select{padding-right:4px}
+.inline{display:flex;gap:6px;align-items:center}
+.inline input{width:auto;flex:1}
+.status{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:var(--r);background:var(--surface-2);border:1px solid var(--line);margin-top:14px}
+.status{flex-wrap:wrap}.status .pill{flex:none}.status > div{min-width:0;flex:1 1 240px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pill.c{background:var(--contrib-soft);color:var(--contrib)}
+.pill.n{background:var(--nao-soft);color:var(--nao)}
+.pill.w{background:var(--warn-soft);color:var(--warn)}
+
+/* grid principal */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;align-items:start}
+@media (max-width:1060px){.main{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+/* tabelas de lançamento */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;white-space:nowrap}
+td.r,th.r{text-align:right}
+.entry td{padding:6px 6px}
+.entry select,.entry input{font-size:.86rem}
+.entry .w-prod{min-width:170px}
+.entry .w-sel{min-width:150px}
+.entry .w-val{min-width:120px}
+.del{border:none;background:transparent;color:var(--muted);font-size:1.1rem;line-height:1;padding:6px 8px;border-radius:6px}
+.del:hover{color:var(--bad);background:var(--surface-2)}
+.addrow{padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.total-row td{font-weight:700;border-bottom:none}
+
+/* chip de base legal */
+.lex{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:.72rem;padding:2px 7px;border-radius:5px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);white-space:nowrap;cursor:pointer;margin:2px 4px 2px 0;max-width:100%}
+.cmp .lex,.status .lex,.hint .lex{white-space:normal;text-align:left}
+.lex:hover{border-color:var(--accent)}
+.lex .dot{width:6px;height:6px;border-radius:50%;background:var(--good)}
+.lex.chk .dot{background:var(--warn)}
+.tr-meta{display:flex;flex-wrap:wrap;align-items:center;margin-top:4px}
+
+/* comparativo */
+.compare{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:1060px){.compare{position:static}}
+.sides{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line)}
+.side{padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.side + .side{border-left:1px solid var(--line)}
+.side.c{background:var(--contrib-soft)}
+.side.n{background:var(--nao-soft)}
+.side .lbl{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.side.c .lbl{color:var(--contrib)}
+.side.n .lbl{color:var(--nao)}
+.side .big{font-family:var(--font-mono);font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums}
+.side .sub{font-size:.74rem;color:var(--muted)}
+.side.mine{box-shadow:inset 0 3px 0 var(--ink)}
+.cmp{width:100%;font-size:.84rem}
+.cmp td{padding:7px 10px}
+.cmp td:first-child{color:var(--muted)}
+.cmp td.v{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cmp tr.sum td{font-weight:700;color:var(--ink);border-top:2px solid var(--ink)}
+.verdict{padding:14px;display:flex;flex-direction:column;gap:8px}
+.verdict .delta{font-family:var(--font-mono);font-size:1.5rem;font-weight:600;font-variant-numeric:tabular-nums}
+.bars{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.bar{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;font-size:.76rem}
+.bar .track{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.bar .fill{height:100%;border-radius:3px}
+.bar .fill.c{background:var(--contrib)}
+.bar .fill.n{background:var(--nao)}
+
+/* memória */
+.memo td{font-size:.84rem}
+.memo .tipo{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.memo .cpos{color:var(--good)}
+.memo .cneg{color:var(--bad)}
+.legal-detail{margin-top:6px;padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface-2);font-size:.8rem;border-radius:0 6px 6px 0;max-width:60ch}
+.legal-detail a{color:var(--accent)}
+
+/* índice legal */
+.lexlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.lexitem{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.lexitem.flash{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.lexitem .ref{font-family:var(--font-mono);font-size:.8rem;font-weight:600}
+.lexitem p{font-size:.84rem}
+.lexitem a{color:var(--accent);font-size:.8rem}
+.conf{font-size:.7rem;font-weight:700}
+.conf.ok{color:var(--good)}
+.conf.chk{color:var(--warn)}
+
+.notice{border:1px solid var(--line);border-left:4px solid var(--warn);background:var(--surface);border-radius:var(--r);padding:12px 14px;font-size:.84rem;display:flex;flex-direction:column;gap:6px}
+.notice ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:520px){.cmp td{padding:6px 6px}.cmp td.v{font-size:.78rem}.sides{grid-template-columns:1fr}.side + .side{border-left:none;border-top:1px solid var(--line)}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Reforma Tributária do Consumo · EC 132/2023 · LC 214/2025</div>
+      <h1>Simulador IBS/CBS do Produtor Rural</h1>
+      <p class="lede">Informe o que você vende e o que você gasta no ano. O simulador calcula débitos, créditos e o resultado nos dois enquadramentos, lado a lado, e mostra o dispositivo legal de cada item.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnCopy" type="button">Copiar resumo</button>
+      <button class="btn ghost" id="btnExample" type="button">Carregar exemplo</button>
+      <button class="btn ghost" id="btnClear" type="button">Limpar</button>
+    </div>
+  </header>
+
+  <!-- PREMISSAS -->
+  <section class="panel" aria-labelledby="h-prem">
+    <div class="panel-h"><h2 id="h-prem">Premissas</h2><span class="muted" style="font-size:.8rem">Todos os percentuais são editáveis</span></div>
+    <div class="panel-b">
+      <div class="params">
+        <div class="field">
+          <label for="pPessoa">Produtor</label>
+          <select id="pPessoa"><option value="PF">Pessoa física (CPF)</option><option value="PJ">Pessoa jurídica (CNPJ)</option></select>
+        </div>
+        <div class="field">
+          <label for="pAno">Ano / fase da transição</label>
+          <select id="pAno"></select>
+          <span class="hint" id="pAnoHint"></span>
+        </div>
+        <div class="field">
+          <label for="pCbs">Alíquota CBS (%)</label>
+          <input id="pCbs" class="num" inputmode="decimal">
+          <span class="hint">Federal. Referência pleno: <span class="mono" id="refCbsTxt"></span></span>
+        </div>
+        <div class="field">
+          <label for="pIbs">Alíquota IBS (%)</label>
+          <input id="pIbs" class="num" inputmode="decimal">
+          <span class="hint">Estadual + municipal. Referência pleno: <span class="mono" id="refIbsTxt"></span></span>
+        </div>
+        <div class="field">
+          <label for="pLimite">Limite de receita do não contribuinte (R$)</label>
+          <input id="pLimite" class="num" inputmode="decimal">
+          <span class="hint">R$ 3,6 mi corrigido anualmente pelo IPCA <button class="lex" data-lex="naocontrib" type="button"><span class="dot"></span>art. 164</button></span>
+        </div>
+        <div class="field">
+          <label for="pPresMode">Crédito presumido do comprador</label>
+          <select id="pPresMode"><option value="auto">Estimar pelos seus insumos</option><option value="manual">Informar percentual</option></select>
+          <div class="inline"><input id="pPres" class="num" inputmode="decimal" aria-label="Percentual de crédito presumido"><span class="mono">%</span></div>
+          <span class="hint">Percentual fixado anualmente por ato do Ministério da Fazenda e do CG-IBS <button class="lex" data-lex="presumido" type="button"><span class="dot"></span>art. 168</button></span>
+        </div>
+        <div class="field">
+          <label for="pRepPres">Parte do crédito presumido que o comprador repassa no preço (%)</label>
+          <input id="pRepPres" class="num" inputmode="decimal">
+          <span class="hint">Premissa de negociação. 100% = comprador indiferente entre os dois perfis.</span>
+        </div>
+        <div class="field">
+          <label for="pRepDeb">Parte do IBS/CBS das vendas que você consegue repassar no preço (%)</label>
+          <input id="pRepDeb" class="num" inputmode="decimal">
+          <span class="hint">Só no perfil contribuinte. 100% = imposto cobrado "por fora" do comprador.</span>
+        </div>
+        <div class="field">
+          <label for="pSimples">Crédito de fornecedor do Simples (% do crédito cheio)</label>
+          <input id="pSimples" class="num" inputmode="decimal">
+          <span class="hint">O crédito fica limitado ao que o fornecedor recolheu no DAS <button class="lex chk" data-lex="simples" type="button"><span class="dot"></span>art. 47</button></span>
+        </div>
+        <div class="field">
+          <label for="pFunrural">Funrural sobre a receita (%)</label>
+          <input id="pFunrural" class="num" inputmode="decimal">
+          <span class="hint">Não muda com a reforma, igual nos dois perfis <button class="lex chk" data-lex="funrural" type="button"><span class="dot"></span>Lei 8.212, art. 25</button></span>
+        </div>
+      </div>
+      <div class="status" id="statusBox"></div>
+    </div>
+  </section>
+
+  <div class="main">
+    <div class="col">
+      <!-- VENDAS -->
+      <section class="panel" aria-labelledby="h-vendas">
+        <div class="panel-h"><h2 id="h-vendas">O que você vende</h2><span class="muted" style="font-size:.8rem">Receita anual, sem IBS/CBS</span></div>
+        <div class="tablewrap">
+          <table class="entry" id="tblVendas">
+            <thead><tr><th>Produto</th><th>Para quem vende</th><th>Tratamento tributário</th><th class="r">Receita anual (R$)</th><th></th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr class="total-row"><td colspan="3">Receita total</td><td class="r num" id="totVendas"></td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="addrow"><button class="btn small" id="addVenda" type="button">+ Adicionar produto</button></div>
+      </section>
+
+      <!-- DESPESAS -->
+      <section class="panel" aria-labelledby="h-desp">
+        <div class="panel-h"><h2 id="h-desp">O que você gasta</h2><span class="muted" style="font-size:.8rem">Valor anual pago, com tributos inclusos</span></div>
+        <div class="tablewrap">
+          <table class="entry" id="tblDesp">
+            <thead><tr><th>Despesa / investimento</th><th>Fornecedor</th><th>Tratamento tributário</th><th class="r">Valor pago (R$)</th><th></th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr class="total-row"><td colspan="3">Despesa total</td><td class="r num" id="totDesp"></td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="addrow"><button class="btn small" id="addDesp" type="button">+ Adicionar despesa</button></div>
+      </section>
+    </div>
+
+    <!-- COMPARATIVO -->
+    <aside class="panel compare" aria-labelledby="h-cmp">
+      <div class="panel-h"><h2 id="h-cmp">Comparativo anual</h2><span class="eyebrow" id="cmpAno"></span></div>
+      <div class="sides">
+        <div class="side c" id="sideC"><span class="lbl">Contribuinte</span><span class="big" id="resC"></span><span class="sub">resultado após tributos</span></div>
+        <div class="side n" id="sideN"><span class="lbl">Não contribuinte</span><span class="big" id="resN"></span><span class="sub">resultado após tributos</span></div>
+      </div>
+      <table class="cmp" id="cmpTable"></table>
+      <div class="verdict" id="verdict"></div>
+    </aside>
+  </div>
+
+  <!-- MEMÓRIA DE CÁLCULO -->
+  <section class="panel" aria-labelledby="h-memo">
+    <div class="panel-h"><h2 id="h-memo">Memória de cálculo item a item</h2><span class="muted" style="font-size:.8rem">Toque no dispositivo legal para ver o fundamento</span></div>
+    <div class="tablewrap">
+      <table class="memo" id="tblMemo">
+        <thead><tr><th>Item</th><th>Tratamento e base legal</th><th class="r">Valor</th><th class="r">Alíq. efetiva</th><th class="r">Contribuinte</th><th class="r">Não contribuinte</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- BASE LEGAL -->
+  <section class="panel" aria-labelledby="h-lex">
+    <div class="panel-h"><h2 id="h-lex">Base legal utilizada</h2>
+      <span style="font-size:.78rem" class="muted"><span class="conf ok">● Confirmado</span> número do artigo conferido em fonte &nbsp; <span class="conf chk">● Conferir</span> regra correta, confirme a numeração no texto consolidado</span></div>
+    <div class="panel-b"><div class="lexlist" id="lexList"></div></div>
+  </section>
+
+  <div class="notice">
+    <strong>Como ler este simulador</strong>
+    <ul>
+      <li>É uma estimativa para apoiar a decisão, não um parecer. Alíquotas de referência ainda serão fixadas pelo Senado; o percentual do crédito presumido sai por ato anual do Ministério da Fazenda e do Comitê Gestor do IBS. Valide o caso concreto com seu contador.</li>
+      <li>Despesas: o valor pago é tratado como preço com IBS/CBS inclusos; o imposto embutido é calculado "por dentro" (valor × t ÷ (1 + t)). Vendas: a receita é informada sem IBS/CBS.</li>
+      <li>O crédito do contribuinte depende do pagamento do imposto pelo fornecedor (split payment) e de documento fiscal idôneo. Saldo credor pode ser ressarcido.</li>
+      <li>De 2027 a 2032 ICMS, PIS/Cofins residuais e o diferimento estadual do ICMS ainda convivem com o novo sistema. Eles não entram neste cálculo.</li>
+      <li>Combustíveis seguem regime monofásico com alíquota por litro; aqui são aproximados pela alíquota padrão.</li>
+    </ul>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+const LC = "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp214.htm";
+const CF = "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm";
+const EC = "https://www.planalto.gov.br/ccivil_03/constituicao/emendas/emc/emc132.htm";
+const L8212 = "https://www.planalto.gov.br/ccivil_03/leis/l8212cons.htm";
+
+/* ---------- BASE LEGAL ---------- */
+const LEX = {
+  incid:{ref:"LC 214/2025, art. 4º", tit:"Incidência", txt:"IBS e CBS incidem sobre operações onerosas com bens e serviços. Sem regra específica, aplica-se a alíquota padrão.", url:LC, ok:false},
+  naocumul:{ref:"LC 214/2025, art. 47", tit:"Não cumulatividade e crédito", txt:"O contribuinte do regime regular apropria crédito do IBS/CBS pago nas aquisições de bens e serviços, condicionado à extinção do débito pelo fornecedor e a documento fiscal idôneo. Inclui bens de capital, com crédito imediato.", url:LC, ok:false},
+  usopessoal:{ref:"LC 214/2025, art. 57", tit:"Uso e consumo pessoal", txt:"É vedado o crédito sobre bens e serviços de uso ou consumo pessoal do contribuinte, sócios ou familiares (veículos de passeio, alimentação, moradia, lazer etc.).", url:LC, ok:false},
+  folha:{ref:"LC 214/2025, art. 6º, I", tit:"Não incidência sobre trabalho", txt:"Não há IBS/CBS sobre serviços prestados por empregados e administradores. A folha não gera débito nem crédito.", url:LC, ok:false},
+  red60prod:{ref:"LC 214/2025, art. 137", tit:"Produtos agropecuários in natura", txt:"Redução de 60% das alíquotas no fornecimento de produtos agropecuários, aquícolas, pesqueiros, florestais e extrativistas vegetais in natura (sem industrialização).", url:LC, ok:true},
+  red60ins:{ref:"LC 214/2025, art. 138 e Anexo IX", tit:"Insumos agropecuários", txt:"Redução de 60% para os insumos agropecuários e aquícolas do Anexo IX (fertilizantes, defensivos, sementes, rações, produtos veterinários etc.), desde que registrados no MAPA quando exigido. O comprador contribuinte credita o valor efetivamente cobrado.", url:LC, ok:true},
+  cesta:{ref:"LC 214/2025, art. 125 e Anexo I", tit:"Cesta Básica Nacional", txt:"Alíquota zero para os alimentos do Anexo I (arroz, feijão, leite, carnes, raízes e tubérculos, entre outros), conforme NCM. Alíquota zero mantém o crédito das etapas anteriores.", url:LC, ok:true},
+  hortifruti:{ref:"LC 214/2025, art. 148 e Anexo XV", tit:"Hortícolas, frutas e ovos", txt:"Alíquota zero no fornecimento de produtos hortícolas, frutas e ovos listados no Anexo XV, conforme NCM.", url:LC, ok:true},
+  coop:{ref:"LC 214/2025, arts. 271 a 274", tit:"Sociedades cooperativas", txt:"Regime específico opcional: alíquota zero no fornecimento do associado para a cooperativa (ato cooperativo) quando a cooperativa opta pelo regime. O associado contribuinte mantém o crédito das aquisições.", url:LC, ok:false},
+  export:{ref:"CF, art. 156-A, §1º, III e LC 214/2025, art. 79", tit:"Exportação", txt:"Exportações são imunes ao IBS/CBS, com manutenção e aproveitamento dos créditos das etapas anteriores. Venda a trading com fim específico de exportação segue regra própria (suspensão).", url:CF, ok:false},
+  naocontrib:{ref:"LC 214/2025, art. 164", tit:"Produtor rural não contribuinte", txt:"Não é contribuinte do IBS/CBS o produtor rural, PF ou PJ, com receita no ano-calendário inferior a R$ 3,6 milhões, valor corrigido anualmente pelo IPCA. A receita soma todas as atividades rurais do mesmo CPF/CNPJ. Acima do limite, a inscrição no regime regular é obrigatória.", url:LC, ok:true},
+  opcao:{ref:"LC 214/2025, art. 165", tit:"Opção pelo regime regular", txt:"O produtor abaixo do limite pode optar por ser contribuinte do regime regular. A opção vale para o ano-calendário e passa a gerar débitos e créditos.", url:LC, ok:true},
+  presumido:{ref:"LC 214/2025, art. 168", tit:"Crédito presumido do adquirente", txt:"O contribuinte que compra de produtor rural não contribuinte (inclusive cooperativas e integradoras) apropria crédito presumido de IBS/CBS sobre o valor da compra, com percentuais fixados anualmente pelo Ministério da Fazenda e pelo CG-IBS. É do comprador, não do produtor; o produtor só se beneficia se ele for repassado no preço.", url:LC, ok:true},
+  imovel:{ref:"LC 214/2025, art. 261", tit:"Locação e arrendamento de imóveis", txt:"Arrendamento rural é tratado como locação de imóvel: redução de 70% das alíquotas quando o arrendador é contribuinte. Arrendador PF só é contribuinte acima dos limites de receita e de número de imóveis (art. 251). Arrendamento pago a PF não contribuinte não gera crédito.", url:LC, ok:false},
+  combust:{ref:"LC 214/2025, arts. 172 a 180", tit:"Combustíveis (monofásico)", txt:"IBS/CBS sobre combustíveis cobrados uma única vez, com alíquota fixa por unidade de medida. O adquirente contribuinte que usa o combustível na atividade credita o valor cobrado.", url:LC, ok:false},
+  financeiro:{ref:"LC 214/2025, arts. 181 e seguintes", tit:"Serviços financeiros e seguros", txt:"Regime específico com base própria. O direito a crédito do adquirente é restrito. O simulador adota a posição conservadora: sem crédito.", url:LC, ok:false},
+  simples:{ref:"LC 214/2025, art. 47 (fornecedor do Simples)", tit:"Compras de optante do Simples Nacional", txt:"O crédito sobre compras de fornecedor do Simples Nacional fica limitado ao IBS/CBS que ele efetivamente recolheu no DAS, normalmente menor que o crédito cheio.", url:LC, ok:false},
+  ressarc:{ref:"LC 214/2025, art. 39", tit:"Ressarcimento de saldo credor", txt:"Créditos não compensados com débitos no período podem ser objeto de ressarcimento, nos prazos e condições da lei.", url:LC, ok:false},
+  transicao:{ref:"EC 132/2023 (ADCT, arts. 125 a 133)", tit:"Transição 2026–2033", txt:"2026: teste com CBS 0,9% e IBS 0,1%, compensáveis. 2027: CBS plena e extinção de PIS/Cofins; IBS 0,1% em 2027–2028. 2029 a 2032: IBS sobe 10%, 20%, 30% e 40% da referência enquanto ICMS e ISS caem. 2033: sistema pleno.", url:EC, ok:false},
+  funrural:{ref:"Lei 8.212/1991, art. 25", tit:"Funrural", txt:"Contribuição previdenciária sobre a receita bruta da comercialização da produção. Não faz parte da reforma do consumo e incide igual nos dois perfis. Alíquota referência 2026 alterada pela LC 224/2025; confirme o percentual vigente.", url:L8212, ok:false},
+  naocontribForn:{ref:"LC 214/2025, arts. 164 e 168", tit:"Compra de produtor não contribuinte", txt:"Compra de outro produtor rural não contribuinte (ex.: bezerros, grãos de terceiros) vem sem IBS/CBS destacado. Se você for contribuinte, apropria crédito presumido sobre o valor da compra.", url:LC, ok:true}
+};
+
+/* ---------- TRATAMENTOS ---------- */
+// m = fração da alíquota cheia; lex = dispositivos
+const TRAT = {
+  integral:{lbl:"Alíquota padrão", m:1, lex:["incid","naocumul"]},
+  red60prod:{lbl:"Redução 60% (in natura)", m:.4, lex:["red60prod"]},
+  red60ins:{lbl:"Redução 60% (insumo Anexo IX)", m:.4, lex:["red60ins","naocumul"]},
+  cesta:{lbl:"Alíquota zero (cesta básica)", m:0, lex:["cesta"]},
+  hortifruti:{lbl:"Alíquota zero (hortifrúti e ovos)", m:0, lex:["hortifruti"]},
+  coop:{lbl:"Alíquota zero (ato cooperativo)", m:0, lex:["coop"]},
+  export:{lbl:"Imune (exportação)", m:0, lex:["export"]},
+  combust:{lbl:"Monofásico (combustível)", m:1, lex:["combust","naocumul"]},
+  imovel:{lbl:"Redução 70% (arrendamento)", m:.3, lex:["imovel"]},
+  folha:{lbl:"Não incidência (folha)", m:0, lex:["folha"]},
+  financeiro:{lbl:"Regime financeiro (sem crédito)", m:0, lex:["financeiro"]},
+  pessoal:{lbl:"Uso pessoal (crédito vedado)", m:1, lex:["usopessoal"]},
+  prodnc:{lbl:"Compra de produtor não contribuinte", m:0, lex:["naocontribForn"]},
+  semtrib:{lbl:"Sem IBS/CBS (fornecedor não contribuinte)", m:0, lex:["naocontrib"]}
+};
+const TRAT_VENDA = ["red60prod","cesta","hortifruti","integral","coop","export"];
+const TRAT_DESP = ["red60ins","integral","combust","imovel","semtrib","folha","financeiro","pessoal","prodnc","cesta","hortifruti","red60prod"];
+
+/* ---------- CATÁLOGOS ---------- */
+const PRODUTOS = [
+  {id:"soja",n:"Soja em grão",ncm:"1201",t:"red60prod"},
+  {id:"milho",n:"Milho em grão",ncm:"1005",t:"red60prod"},
+  {id:"trigo",n:"Trigo em grão",ncm:"1001",t:"red60prod"},
+  {id:"arroz",n:"Arroz em casca",ncm:"1006.10",t:"red60prod",obs:"Arroz beneficiado está no Anexo I (alíquota zero). Em casca segue o art. 137."},
+  {id:"feijao",n:"Feijão",ncm:"0713.33",t:"cesta"},
+  {id:"leite",n:"Leite cru",ncm:"0401",t:"red60prod",obs:"Confira se a NCM do leite vendido consta do Anexo I; se constar, use alíquota zero."},
+  {id:"bovinos",n:"Bovinos vivos",ncm:"0102",t:"red60prod"},
+  {id:"suinos",n:"Suínos vivos",ncm:"0103",t:"red60prod"},
+  {id:"aves",n:"Frangos vivos (integração)",ncm:"0105",t:"red60prod",obs:"Produtor integrado não contribuinte também gera crédito presumido à integradora (art. 168)."},
+  {id:"cafe",n:"Café em grão cru",ncm:"0901.11",t:"red60prod"},
+  {id:"mandioca",n:"Mandioca e tubérculos",ncm:"0714",t:"cesta"},
+  {id:"hortalicas",n:"Hortaliças",ncm:"07",t:"hortifruti"},
+  {id:"frutas",n:"Frutas frescas",ncm:"08",t:"hortifruti"},
+  {id:"ovos",n:"Ovos",ncm:"0407",t:"hortifruti"},
+  {id:"madeira",n:"Madeira em tora",ncm:"4403",t:"red60prod"},
+  {id:"outro",n:"Outro produto (industrializado)",ncm:"",t:"integral"}
+];
+const DESTINOS = [
+  {id:"contrib",n:"Empresa contribuinte (indústria, cerealista, trading)",pres:true},
+  {id:"coop",n:"Cooperativa (ato cooperativo)",pres:true,t:"coop"},
+  {id:"export",n:"Exportação direta",pres:false,t:"export"},
+  {id:"consumidor",n:"Consumidor final / não contribuinte",pres:false}
+];
+const DESPESAS = [
+  {id:"fert",n:"Fertilizantes e corretivos",t:"red60ins",f:"reg"},
+  {id:"def",n:"Defensivos agrícolas",t:"red60ins",f:"reg"},
+  {id:"sem",n:"Sementes e mudas",t:"red60ins",f:"reg"},
+  {id:"racao",n:"Rações e suplementos",t:"red60ins",f:"reg"},
+  {id:"vet",n:"Vacinas e medicamentos veterinários",t:"red60ins",f:"reg"},
+  {id:"diesel",n:"Óleo diesel e combustíveis",t:"combust",f:"reg"},
+  {id:"energia",n:"Energia elétrica",t:"integral",f:"reg"},
+  {id:"maq",n:"Máquinas, implementos e utilitários",t:"integral",f:"reg"},
+  {id:"manut",n:"Peças, manutenção e reparos",t:"integral",f:"reg"},
+  {id:"frete",n:"Fretes e transporte de cargas",t:"integral",f:"reg"},
+  {id:"serv",n:"Serviços terceirizados (colheita, pulverização, agrônomo)",t:"integral",f:"reg"},
+  {id:"benf",n:"Construções e benfeitorias",t:"integral",f:"reg"},
+  {id:"arrPF",n:"Arrendamento pago a pessoa física",t:"semtrib",f:"nc"},
+  {id:"arrPJ",n:"Arrendamento pago a empresa contribuinte",t:"imovel",f:"reg"},
+  {id:"folha",n:"Mão de obra (folha e encargos)",t:"folha",f:"nc"},
+  {id:"compraProd",n:"Compra de outro produtor não contribuinte",t:"prodnc",f:"nc"},
+  {id:"fin",n:"Juros, seguro rural e tarifas bancárias",t:"financeiro",f:"reg"},
+  {id:"pessoal",n:"Despesas pessoais e da família",t:"pessoal",f:"reg"},
+  {id:"outra",n:"Outra despesa",t:"integral",f:"reg"}
+];
+const FORN = [{id:"reg",n:"Contribuinte regular"},{id:"sn",n:"Optante do Simples"},{id:"nc",n:"Não contribuinte / PF"}];
+
+/* ---------- FASES ---------- */
+const REF = {cbs:8.8, ibs:17.7};
+const FASES = [
+  {id:"2026",n:"2026 · teste",cbs:()=>0.9,ibs:()=>0.1,h:"Valores de teste, compensáveis com PIS/Cofins. Sem custo efetivo para quem cumpre as obrigações acessórias."},
+  {id:"2027",n:"2027–2028 · CBS plena",cbs:()=>REF.cbs-0.1,ibs:()=>0.1,h:"CBS substitui PIS/Cofins. IBS ainda simbólico (0,1%)."},
+  {id:"2029",n:"2029 · IBS 10%",cbs:()=>REF.cbs,ibs:()=>REF.ibs*.1,h:"IBS a 10% da referência; ICMS reduzido na mesma proporção (não simulado)."},
+  {id:"2030",n:"2030 · IBS 20%",cbs:()=>REF.cbs,ibs:()=>REF.ibs*.2,h:"IBS a 20% da referência."},
+  {id:"2031",n:"2031 · IBS 30%",cbs:()=>REF.cbs,ibs:()=>REF.ibs*.3,h:"IBS a 30% da referência."},
+  {id:"2032",n:"2032 · IBS 40%",cbs:()=>REF.cbs,ibs:()=>REF.ibs*.4,h:"IBS a 40% da referência."},
+  {id:"2033",n:"2033 · sistema pleno",cbs:()=>REF.cbs,ibs:()=>REF.ibs,h:"ICMS e ISS extintos. Alíquotas de referência estimadas (soma ≈ 26,5%)."},
+  {id:"custom",n:"Personalizado",cbs:null,ibs:null,h:"Informe as alíquotas manualmente."}
+];
+
+/* ---------- ESTADO ---------- */
+const KEY = "simIbsCbsProdutor.v1";
+let uid = 1;
+const nid = () => "r" + (uid++);
+function exampleState(){
+  return {
+    pessoa:"PF", ano:"2033", cbs:REF.cbs, ibs:REF.ibs, limite:3600000, presMode:"auto", pres:0, repPres:50, repDeb:100, simples:35, funrural:1.63,
+    vendas:[
+      {id:nid(),p:"soja",d:"contrib",t:"red60prod",v:2000000},
+      {id:nid(),p:"milho",d:"coop",t:"coop",v:600000},
+      {id:nid(),p:"bovinos",d:"contrib",t:"red60prod",v:400000}
+    ],
+    desp:[
+      {id:nid(),p:"fert",f:"reg",t:"red60ins",v:450000},
+      {id:nid(),p:"def",f:"reg",t:"red60ins",v:380000},
+      {id:nid(),p:"sem",f:"reg",t:"red60ins",v:180000},
+      {id:nid(),p:"diesel",f:"reg",t:"combust",v:220000},
+      {id:nid(),p:"energia",f:"reg",t:"integral",v:40000},
+      {id:nid(),p:"maq",f:"reg",t:"integral",v:300000},
+      {id:nid(),p:"manut",f:"sn",t:"integral",v:120000},
+      {id:nid(),p:"frete",f:"reg",t:"integral",v:90000},
+      {id:nid(),p:"folha",f:"nc",t:"folha",v:260000},
+      {id:nid(),p:"arrPF",f:"nc",t:"semtrib",v:250000},
+      {id:nid(),p:"serv",f:"reg",t:"integral",v:80000},
+      {id:nid(),p:"pessoal",f:"reg",t:"pessoal",v:60000}
+    ]
+  };
+}
+let S;
+try{ const raw = localStorage.getItem(KEY); S = raw ? JSON.parse(raw) : null; }catch(e){ S = null; }
+if(!S || !Array.isArray(S.vendas)) S = exampleState();
+S.vendas.forEach(r=>{ if(!r.id) r.id=nid(); }); S.desp.forEach(r=>{ if(!r.id) r.id=nid(); });
+uid = 1000;
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+/* ---------- FORMATAÇÃO ---------- */
+const fBRL = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
+const fNum = new Intl.NumberFormat("pt-BR",{maximumFractionDigits:0});
+const fPct = new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const brl = v => fBRL.format(Math.round(v||0));
+const pct = v => fPct.format(v||0) + "%";
+function parseNum(s){
+  if(typeof s === "number") return s;
+  s = String(s||"").trim().replace(/[R$\s%]/g,"");
+  if(!s) return 0;
+  if(s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g,"");
+  const n = parseFloat(s); return isFinite(n) ? n : 0;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const byId = (arr,id) => arr.find(x=>x.id===id);
+function lexChip(k){ const L = LEX[k]; return `<button type="button" class="lex${L.ok?"":" chk"}" data-lex="${k}" title="${esc(L.tit)}"><span class="dot"></span>${esc(L.ref)}</button>`; }
+
+/* ---------- CÁLCULO ---------- */
+function compute(){
+  const tFull = (S.cbs + S.ibs)/100;
+  const items = [];
+  let receita=0, debito=0, credito=0, embutido=0, despesa=0, receitaPres=0, presBase=0;
+
+  // despesas primeiro (para estimar o crédito presumido automático)
+  S.desp.forEach(r=>{
+    const T = TRAT[r.t] || TRAT.integral;
+    const te = tFull * T.m;
+    const v = r.v || 0;
+    const imp = te>0 ? v*te/(1+te) : 0;   // imposto embutido no preço pago
+    let fator = r.f==="reg" ? 1 : r.f==="sn" ? (S.simples/100) : 0;
+    if(r.t==="pessoal" || r.t==="financeiro") fator = 0;
+    let cred = imp * fator;
+    items.push({kind:"desp", r, T, te, v, imp, cred, pres:false});
+    despesa += v; embutido += imp; credito += cred;
+  });
+  const presAuto = 0; // placeholder, calculado abaixo
+  S.vendas.forEach(r=>{
+    const D = byId(DESTINOS, r.d) || DESTINOS[0];
+    if(D.pres) presBase += r.v||0;
+    receita += r.v||0;
+  });
+  // percentual do crédito presumido
+  let presPct = S.presMode==="auto" ? (receita>0 ? embutido/receita*100 : 0) : S.pres;
+  presPct = Math.max(0, presPct);
+  // compra de produtor não contribuinte: crédito presumido para o contribuinte
+  items.forEach(it=>{
+    if(it.kind==="desp" && it.r.t==="prodnc"){ it.cred = it.v * presPct/100; it.presCompra = true; credito += it.cred; }
+  });
+  S.vendas.forEach(r=>{
+    const T = TRAT[r.t] || TRAT.integral;
+    const D = byId(DESTINOS, r.d) || DESTINOS[0];
+    const te = tFull * T.m;
+    const v = r.v||0;
+    const deb = v*te;
+    const presC = D.pres ? v*presPct/100 : 0;
+    items.unshift({kind:"venda", r, T, D, te, v, deb, presC});
+    debito += deb; receitaPres += presC;
+  });
+  items.sort((a,b)=> (a.kind===b.kind?0:(a.kind==="venda"?-1:1)));
+
+  const rep = S.repDeb/100, repP = S.repPres/100;
+  const funrural = receita * S.funrural/100;
+  const saldo = debito - credito;            // >0 a recolher; <0 saldo credor
+  const debNaoRepassado = debito*(1-rep);
+  const presRecebido = receitaPres*repP;
+
+  const C = {
+    receita, cobradoComprador: debito*rep, despesa, credito, debito,
+    aRecolher: Math.max(0,saldo), saldoCredor: Math.max(0,-saldo),
+    custoTrib: (embutido - credito) + debNaoRepassado,
+    funrural
+  };
+  C.resultado = receita - despesa + credito - debNaoRepassado - funrural;
+  const N = {
+    receita, despesa, credito:0, debito:0, aRecolher:0, saldoCredor:0,
+    presGerado: receitaPres, presRecebido, custoTrib: embutido, funrural
+  };
+  N.resultado = receita + presRecebido - despesa - funrural;
+  return {tFull, presPct, items, C, N, embutido, receita, despesa, presBase};
+}
+
+/* ---------- RENDER ---------- */
+const $ = id => document.getElementById(id);
+function optList(list, sel, labelFn){ return list.map(o=>`<option value="${o.id}"${o.id===sel?" selected":""}>${esc(labelFn?labelFn(o):o.n)}</option>`).join(""); }
+function tratOpts(keys, sel){ return keys.map(k=>`<option value="${k}"${k===sel?" selected":""}>${esc(TRAT[k].lbl)}</option>`).join(""); }
+
+function renderParams(){
+  $("pAno").innerHTML = optList(FASES, S.ano);
+  $("pPessoa").value = S.pessoa;
+  $("pCbs").value = fPct.format(S.cbs); $("pIbs").value = fPct.format(S.ibs);
+  $("refCbsTxt").textContent = pct(REF.cbs); $("refIbsTxt").textContent = pct(REF.ibs);
+  $("pLimite").value = fNum.format(S.limite);
+  $("pPresMode").value = S.presMode;
+  $("pRepPres").value = fNum.format(S.repPres); $("pRepDeb").value = fNum.format(S.repDeb);
+  $("pSimples").value = fNum.format(S.simples); $("pFunrural").value = fPct.format(S.funrural);
+  const F = byId(FASES,S.ano); $("pAnoHint").innerHTML = esc(F?F.h:"") + " " + lexChip("transicao");
+}
+
+function rowVenda(r){
+  const P = byId(PRODUTOS,r.p)||PRODUTOS[0];
+  const T = TRAT[r.t]||TRAT.integral;
+  return `<tr data-id="${r.id}" data-kind="venda">
+    <td><select class="w-prod" data-f="p" aria-label="Produto">${optList(PRODUTOS,r.p,o=>o.n+(o.ncm?" · NCM "+o.ncm:""))}</select>
+      ${P.obs?`<div class="hint muted" style="font-size:.74rem;margin-top:4px;max-width:34ch">${esc(P.obs)}</div>`:""}</td>
+    <td><select class="w-sel" data-f="d" aria-label="Destino">${optList(DESTINOS,r.d)}</select></td>
+    <td><select class="w-sel" data-f="t" aria-label="Tratamento">${tratOpts(TRAT_VENDA,r.t)}</select>
+      <div class="tr-meta">${T.lex.map(lexChip).join("")}</div></td>
+    <td><input class="num w-val" data-f="v" inputmode="decimal" value="${fNum.format(r.v||0)}" aria-label="Receita anual"></td>
+    <td><button class="del" type="button" data-del title="Remover" aria-label="Remover linha">×</button></td></tr>`;
+}
+function rowDesp(r){
+  const T = TRAT[r.t]||TRAT.integral;
+  return `<tr data-id="${r.id}" data-kind="desp">
+    <td><select class="w-prod" data-f="p" aria-label="Despesa">${optList(DESPESAS,r.p)}</select></td>
+    <td><select class="w-sel" data-f="f" aria-label="Fornecedor">${optList(FORN,r.f)}</select>
+      ${r.f==="sn"?`<div class="tr-meta">${lexChip("simples")}</div>`:""}</td>
+    <td><select class="w-sel" data-f="t" aria-label="Tratamento">${tratOpts(TRAT_DESP,r.t)}</select>
+      <div class="tr-meta">${T.lex.map(lexChip).join("")}</div></td>
+    <td><input class="num w-val" data-f="v" inputmode="decimal" value="${fNum.format(r.v||0)}" aria-label="Valor pago"></td>
+    <td><button class="del" type="button" data-del title="Remover" aria-label="Remover linha">×</button></td></tr>`;
+}
+function renderTables(){
+  $("tblVendas").tBodies[0].innerHTML = S.vendas.map(rowVenda).join("") || `<tr><td colspan="5" class="muted">Nenhum produto. Adicione o que você vende.</td></tr>`;
+  $("tblDesp").tBodies[0].innerHTML = S.desp.map(rowDesp).join("") || `<tr><td colspan="5" class="muted">Nenhuma despesa. Adicione seus gastos do ano.</td></tr>`;
+}
+
+function renderResults(){
+  const R = compute(), C = R.C, N = R.N;
+  $("totVendas").textContent = brl(R.receita);
+  $("totDesp").textContent = brl(R.despesa);
+  if(S.presMode==="auto"){ $("pPres").value = fPct.format(R.presPct); $("pPres").disabled = true; }
+  else { $("pPres").disabled = false; if(document.activeElement!==$("pPres")) $("pPres").value = fPct.format(S.pres); }
+
+  // enquadramento
+  const acima = R.receita >= S.limite;
+  const box = $("statusBox");
+  box.innerHTML = acima
+    ? `<span class="pill c">Contribuinte obrigatório</span><div><strong>Receita de ${brl(R.receita)} atinge o limite de ${brl(S.limite)}.</strong> Você é contribuinte do IBS/CBS no regime regular; a coluna “não contribuinte” serve só de comparação. ${lexChip("naocontrib")}</div>`
+    : `<span class="pill n">Não contribuinte por padrão</span><div><strong>Receita de ${brl(R.receita)} abaixo do limite de ${brl(S.limite)}.</strong> Você pode continuar fora do IBS/CBS ou optar pelo regime regular. Lembre que o limite soma todas as atividades do mesmo ${S.pessoa==="PF"?"CPF":"CNPJ"}. ${lexChip("naocontrib")} ${lexChip("opcao")}</div>`;
+  $("sideC").classList.toggle("mine", acima);
+  $("sideN").classList.toggle("mine", !acima);
+
+  $("cmpAno").textContent = (byId(FASES,S.ano)||{}).n + " · alíq. cheia " + pct(R.tFull*100);
+  $("resC").textContent = brl(C.resultado);
+  $("resN").textContent = brl(N.resultado);
+
+  const line = (lbl, c, n, cls) => `<tr${cls?` class="${cls}"`:""}><td>${lbl}</td><td class="v">${c}</td><td class="v">${n}</td></tr>`;
+  const neg = v => v ? "− " + brl(v) : brl(0);
+  const pos = v => v ? "+ " + brl(v) : brl(0);
+  $("cmpTable").innerHTML =
+    `<thead><tr><th></th><th class="r">Contrib.</th><th class="r">Não contrib.</th></tr></thead><tbody>` +
+    line("Receita de vendas", brl(C.receita), brl(N.receita)) +
+    line("Despesas pagas", neg(C.despesa), neg(N.despesa)) +
+    line("Créditos de IBS/CBS recuperados " + lexChip("naocumul"), pos(C.credito), "—") +
+    line("IBS/CBS das vendas não repassado", neg(C.debito*(1-S.repDeb/100)), "—") +
+    line("Crédito presumido repassado pelo comprador " + lexChip("presumido"), "—", pos(N.presRecebido)) +
+    line("Funrural " + lexChip("funrural"), neg(C.funrural), neg(N.funrural)) +
+    line("Resultado", brl(C.resultado), brl(N.resultado), "sum") +
+    `</tbody><tbody>` +
+    line("<span class='eyebrow'>Fluxo fiscal</span>","","") +
+    line("Débito nas vendas", brl(C.debito), "—") +
+    line("IBS/CBS a recolher", brl(C.aRecolher), brl(0)) +
+    line("Saldo credor (ressarcível) " + lexChip("ressarc"), brl(C.saldoCredor), "—") +
+    line("Tributo que vira custo", brl(C.custoTrib), brl(N.custoTrib)) +
+    line("Crédito presumido gerado ao comprador", "—", brl(N.presGerado)) +
+    `</tbody>`;
+
+  const diff = C.resultado - N.resultado;
+  const melhor = Math.abs(diff) < 1 ? null : (diff>0 ? "c" : "n");
+  const maxR = Math.max(Math.abs(C.resultado), Math.abs(N.resultado), 1);
+  const ctaxC = R.receita ? C.custoTrib/R.receita*100 : 0, ctaxN = R.receita ? N.custoTrib/R.receita*100 : 0;
+  $("verdict").innerHTML = `
+    <span class="eyebrow">Diferença anual</span>
+    <div class="delta" style="color:${melhor==="c"?"var(--contrib)":melhor==="n"?"var(--nao)":"var(--ink)"}">${melhor?brl(Math.abs(diff)):"Empate"}</div>
+    <p style="font-size:.86rem">${melhor==="c"
+      ? `<strong>Ser contribuinte</strong> rende mais neste cenário: os créditos recuperados (${brl(C.credito)}) superam o que você deixa de receber em crédito presumido repassado (${brl(N.presRecebido)})${S.repDeb<100?" e o imposto que não consegue repassar":""}.`
+      : melhor==="n"
+      ? `<strong>Ficar como não contribuinte</strong> rende mais neste cenário: o repasse do crédito presumido (${brl(N.presRecebido)}) e a ausência de débito compensam os créditos que você deixaria de recuperar (${brl(C.credito)}).`
+      : "Os dois perfis empatam com essas premissas."}</p>
+    <div class="bars" aria-label="Resultado por perfil">
+      <div class="bar"><span>Contribuinte</span><div class="track"><div class="fill c" style="width:${Math.max(0,C.resultado)/maxR*100}%"></div></div></div>
+      <div class="bar"><span>Não contrib.</span><div class="track"><div class="fill n" style="width:${Math.max(0,N.resultado)/maxR*100}%"></div></div></div>
+    </div>
+    <p class="muted" style="font-size:.78rem">Tributo que vira custo sobre a receita: contribuinte ${pct(ctaxC)} · não contribuinte ${pct(ctaxN)}. ${C.saldoCredor>0?"Há saldo credor: o caixa depende do prazo de ressarcimento.":""}</p>`;
+
+  renderMemo(R);
+  return R;
+}
+
+function renderMemo(R){
+  const rows = R.items.map(it=>{
+    const isV = it.kind==="venda";
+    const nome = isV ? (byId(PRODUTOS,it.r.p)||{}).n : (byId(DESPESAS,it.r.p)||{}).n;
+    const sub = isV ? (it.D?it.D.n:"") : (byId(FORN,it.r.f)||{}).n;
+    const lexKeys = [...it.T.lex];
+    if(isV && it.D && it.D.pres && !lexKeys.includes("presumido")) lexKeys.push("presumido");
+    if(!isV && it.r.f==="sn") lexKeys.push("simples");
+    const lexHtml = lexKeys.map(lexChip).join("");
+    let cC, cN, alq = pct(it.te*100);
+    if(isV){
+      cC = it.deb ? `<span class="cneg">débito ${brl(it.deb)}</span>` : (it.r.t==="export"||it.r.t==="coop"||it.T.m===0 ? `<span class="muted">sem débito, mantém créditos</span>` : brl(0));
+      cN = it.presC ? `<span class="muted">gera ${brl(it.presC)} de crédito presumido ao comprador</span>` : `<span class="muted">sem IBS/CBS</span>`;
+    } else {
+      if(it.presCompra){ alq = pct(R.presPct) + " pres."; cC = it.cred?`<span class="cpos">crédito presumido ${brl(it.cred)}</span>`:brl(0); cN = `<span class="muted">sem crédito</span>`; }
+      else {
+        cC = it.cred ? `<span class="cpos">crédito ${brl(it.cred)}</span>` : (it.imp ? `<span class="cneg">${brl(it.imp)} vira custo</span>` : `<span class="muted">sem IBS/CBS</span>`);
+        if(it.cred && it.imp - it.cred > 1) cC += `<br><span class="cneg" style="font-size:.76rem">${brl(it.imp-it.cred)} sem crédito</span>`;
+        cN = it.imp ? `<span class="cneg">${brl(it.imp)} vira custo</span>` : `<span class="muted">sem IBS/CBS</span>`;
+      }
+    }
+    return `<tr><td><div class="tipo">${isV?"Venda":"Despesa"}</div><strong>${esc(nome||"")}</strong><div class="muted" style="font-size:.76rem">${esc(sub||"")}</div></td>
+      <td>${esc(it.T.lbl)}<div class="tr-meta">${lexHtml}</div></td>
+      <td class="r num">${brl(it.v)}</td><td class="r num">${alq}</td><td class="r">${cC}</td><td class="r">${cN}</td></tr>`;
+  }).join("");
+  $("tblMemo").tBodies[0].innerHTML = rows || `<tr><td colspan="6" class="muted">Adicione produtos e despesas para ver a memória de cálculo.</td></tr>`;
+}
+
+function renderLexList(){
+  $("lexList").innerHTML = Object.entries(LEX).map(([k,L])=>`
+    <div class="lexitem" id="lex-${k}">
+      <span class="conf ${L.ok?"ok":"chk"}">● ${L.ok?"Confirmado":"Conferir numeração"}</span>
+      <span class="ref">${esc(L.ref)}</span>
+      <h3>${esc(L.tit)}</h3>
+      <p>${esc(L.txt)}</p>
+      <a href="${L.url}" target="_blank" rel="noopener">Abrir texto oficial (Planalto) ↗</a>
+    </div>`).join("");
+}
+
+/* ---------- EVENTOS ---------- */
+function fullRender(){ renderParams(); renderTables(); renderResults(); }
+
+function onParam(e){
+  const id = e.target.id;
+  const v = e.target.value;
+  if(id==="pPessoa") S.pessoa = v;
+  else if(id==="pAno"){ S.ano = v; const F = byId(FASES,v); if(F && F.cbs){ S.cbs = +F.cbs().toFixed(2); S.ibs = +F.ibs().toFixed(2); } renderParams(); }
+  else if(id==="pCbs"){ S.cbs = parseNum(v); S.ano="custom"; }
+  else if(id==="pIbs"){ S.ibs = parseNum(v); S.ano="custom"; }
+  else if(id==="pLimite") S.limite = parseNum(v);
+  else if(id==="pPresMode") S.presMode = v;
+  else if(id==="pPres") S.pres = parseNum(v);
+  else if(id==="pRepPres") S.repPres = Math.min(100,Math.max(0,parseNum(v)));
+  else if(id==="pRepDeb") S.repDeb = Math.min(100,Math.max(0,parseNum(v)));
+  else if(id==="pSimples") S.simples = Math.min(100,Math.max(0,parseNum(v)));
+  else if(id==="pFunrural") S.funrural = parseNum(v);
+  if(e.type==="change" && (id==="pCbs"||id==="pIbs")) renderParams();
+  save(); renderResults();
+}
+document.querySelectorAll(".params input, .params select").forEach(el=>{
+  el.addEventListener(el.tagName==="SELECT"?"change":"input", onParam);
+  if(el.tagName==="INPUT") el.addEventListener("change", ()=>{ renderParams(); renderResults(); });
+});
+
+function onTable(e){
+  const tr = e.target.closest("tr[data-id]"); if(!tr) return;
+  const list = tr.dataset.kind==="venda" ? S.vendas : S.desp;
+  const r = byId(list, tr.dataset.id); if(!r) return;
+  const f = e.target.dataset.f; if(!f) return;
+  if(f==="v"){ r.v = parseNum(e.target.value); if(e.type==="change") e.target.value = fNum.format(r.v); save(); renderResults(); return; }
+  if(e.type!=="change") return;
+  r[f] = e.target.value;
+  if(tr.dataset.kind==="venda"){
+    if(f==="p"){ const P = byId(PRODUTOS,r.p); const D = byId(DESTINOS,r.d); r.t = (D&&D.t) || P.t; }
+    if(f==="d"){ const P = byId(PRODUTOS,r.p); const D = byId(DESTINOS,r.d); r.t = (D&&D.t) || P.t; }
+  } else {
+    if(f==="p"){ const D = byId(DESPESAS,r.p); r.t = D.t; r.f = D.f; }
+    if(f==="f" && r.f==="nc" && ["integral","red60ins","combust","imovel"].includes(r.t)) r.t = "semtrib";
+  }
+  save(); renderTables(); renderResults();
+}
+["tblVendas","tblDesp"].forEach(id=>{
+  const t = $(id);
+  t.addEventListener("input", onTable); t.addEventListener("change", onTable);
+  t.addEventListener("click", e=>{
+    if(!e.target.closest("[data-del]")) return;
+    const tr = e.target.closest("tr[data-id]");
+    const key = tr.dataset.kind==="venda" ? "vendas" : "desp";
+    S[key] = S[key].filter(r=>r.id!==tr.dataset.id);
+    save(); renderTables(); renderResults();
+  });
+});
+$("addVenda").addEventListener("click", ()=>{ S.vendas.push({id:nid(),p:"soja",d:"contrib",t:"red60prod",v:0}); save(); renderTables(); renderResults(); const ins = $("tblVendas").querySelectorAll("tbody input"); ins[ins.length-1]?.focus(); });
+$("addDesp").addEventListener("click", ()=>{ S.desp.push({id:nid(),p:"fert",f:"reg",t:"red60ins",v:0}); save(); renderTables(); renderResults(); const ins = $("tblDesp").querySelectorAll("tbody input"); ins[ins.length-1]?.focus(); });
+
+let pendingClear = false;
+$("btnExample").addEventListener("click", ()=>{ S = exampleState(); save(); fullRender(); toast("Exemplo carregado"); });
+$("btnClear").addEventListener("click", e=>{
+  if(!pendingClear){ pendingClear = true; e.target.textContent = "Confirmar limpeza"; setTimeout(()=>{ pendingClear=false; e.target.textContent="Limpar"; }, 3500); return; }
+  pendingClear = false; e.target.textContent = "Limpar";
+  S.vendas = []; S.desp = []; save(); fullRender(); toast("Lançamentos apagados");
+});
+
+// chips de base legal: rolar até o dispositivo
+document.addEventListener("click", e=>{
+  const b = e.target.closest(".lex[data-lex]"); if(!b) return;
+  const el = $("lex-" + b.dataset.lex); if(!el) return;
+  el.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"center"});
+  el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"), 1600);
+});
+
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove("on"), 1800); }
+
+$("btnCopy").addEventListener("click", ()=>{
+  const R = compute(), C = R.C, N = R.N;
+  const F = byId(FASES,S.ano);
+  const lines = [
+    "SIMULAÇÃO IBS/CBS – PRODUTOR RURAL",
+    `Cenário: ${F?F.n:""} | CBS ${pct(S.cbs)} + IBS ${pct(S.ibs)}`,
+    `Receita: ${brl(R.receita)} | Despesas: ${brl(R.despesa)} | Limite não contribuinte: ${brl(S.limite)} (LC 214/2025, art. 164)`,
+    "",
+    "                         CONTRIBUINTE    NÃO CONTRIBUINTE",
+    `Créditos recuperados     ${brl(C.credito).padStart(14)}    ${"—".padStart(16)}`,
+    `Débito nas vendas        ${brl(C.debito).padStart(14)}    ${"—".padStart(16)}`,
+    `IBS/CBS a recolher       ${brl(C.aRecolher).padStart(14)}    ${brl(0).padStart(16)}`,
+    `Créd. presumido recebido ${"—".padStart(14)}    ${brl(N.presRecebido).padStart(16)}`,
+    `Tributo que vira custo   ${brl(C.custoTrib).padStart(14)}    ${brl(N.custoTrib).padStart(16)}`,
+    `RESULTADO                ${brl(C.resultado).padStart(14)}    ${brl(N.resultado).padStart(16)}`,
+    "",
+    "ITENS E BASE LEGAL"
+  ];
+  R.items.forEach(it=>{
+    const nome = it.kind==="venda" ? (byId(PRODUTOS,it.r.p)||{}).n : (byId(DESPESAS,it.r.p)||{}).n;
+    lines.push(`- ${it.kind==="venda"?"Venda":"Despesa"}: ${nome} ${brl(it.v)} | ${it.T.lbl} | ${it.T.lex.map(k=>LEX[k].ref).join("; ")}`);
+  });
+  lines.push("", "Estimativa. Alíquotas e percentuais de crédito presumido sujeitos a regulamentação. Confirme com seu contador.");
+  const txt = lines.join("\n");
+  const done = ()=>toast("Resumo copiado");
+  try{ navigator.clipboard.writeText(txt).then(done, ()=>fallbackCopy(txt)); }catch(err){ fallbackCopy(txt); }
+});
+function fallbackCopy(txt){
+  const ta = document.createElement("textarea"); ta.value = txt; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+  let ok=false; try{ ok = document.execCommand("copy"); }catch(e){}
+  document.body.removeChild(ta); toast(ok?"Resumo copiado":"Não foi possível copiar neste navegador");
+}
+
+renderLexList();
+fullRender();
+})();
+</script>
